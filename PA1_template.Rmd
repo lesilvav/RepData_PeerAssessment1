@@ -1,25 +1,98 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research - Course Project 1"
+author: "Luis Silva"
+date: "June 1, 2019"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+library(dplyr)
+library(lubridate)
+library(lattice)
+library(ggplot2)
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+### 1. Loading and preprocessing the data
+1. Load the data
+```{r}
+if (!file.exists("activity.csv")) {
+    unzip(zipfile="activity.zip")    
+}
 
+activity = read.csv("activity.csv")
+```
+2. Process/transform the data (if necessary) into a format suitable for your analysis
+```{r}
+activity$date = as_date(activity$date)
+```
 
+### 2. What is mean total number of steps taken per day?
+1. Calculate the total number of steps taken per day
+```{r}
+stepsByDate <- summarize(group_by(activity, date), steps=sum(steps,na.rm=TRUE))
+stepsByDate
+```
+2. Make a histogram of the total number of steps taken each day
+```{r}
+hist(stepsByDate$steps, ylim=c(0,35))
+```
+3. Calculate and report the mean and median of the total number of steps taken per day
+```{r}
+meanMedianByDate <- summarize(group_by(activity, date), mean=mean(steps,na.rm=TRUE), median=median(steps,na.rm=TRUE))
+meanMedianByDate
+```
+### 3. What is the average daily activity pattern?
+1. Make a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r}
+meanStepsByInterval<-summarize(group_by(activity, interval), meanSteps=mean(steps,na.rm=TRUE))
+with(meanStepsByInterval, plot(interval, meanSteps, type="l"))
+```
+2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r}
+meanStepsByInterval$interval[which.max(meanStepsByInterval$meanSteps)]
+```
 
-## What is mean total number of steps taken per day?
+### 4. Imputing missing values
+1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r}
+sum(is.na(activity$steps))
+```
+2. Devise a strategy for filling in all of the missing values in the dataset.
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r}
+activityToImpute = activity
+activityToImpute = group_by(activityToImpute, interval)
+activityComplete = mutate(activityToImpute,meanSteps=mean(steps,na.rm=TRUE),steps=replace(steps,which(is.na(steps)),first(meanSteps)))
+activityComplete
+```
+4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+```{r}
+meanStepsByDateComplete = summarize(group_by(activityComplete, date), steps=sum(steps), meanSteps=mean(steps), medianSteps=median(steps))
+hist(meanStepsByDateComplete$steps, ylim=c(0,35))
+meanStepsByDateComplete
+```
 
+### 5. Are there differences in activity patterns between weekdays and weekends?
+1. Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+```{r}
+activityComplete = mutate(activityComplete, dateType = weekdays(date))
+activityComplete$dateType[!activityComplete$dateType=="Saturday" & !activityComplete$dateType=="Sunday"] = "Weekday"
+activityComplete$dateType[activityComplete$dateType=="Saturday" | activityComplete$dateType=="Sunday"] = "Weekend"
+activityComplete
+```
+2. Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+```{r}
+activityCompleteByInterval = summarize(group_by(activityComplete, interval, dateType), meanSteps=mean(steps))
+activityCompleteByInterval<-as.data.frame(activityCompleteByInterval)
 
+activityCompleteByInterval$dateType<-as.factor(activityCompleteByInterval$dateType)
 
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+par(mfrow=c(2,1))
+plot = ggplot(activityCompleteByInterval, aes(x = interval , y = meanSteps)) +
+    geom_line() +
+    labs(title = "Average daily steps by type of date", x = "Interval", 
+         y = "Average number of steps") +
+    facet_wrap(~dateType, ncol = 1, nrow=2)
+print(plot)
+```
